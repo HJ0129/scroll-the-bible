@@ -1,1 +1,216 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>스크롤 바이블</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
 
+  body {
+    font-family: -apple-system, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+    background: #000;
+    overflow: hidden;
+  }
+
+  #feed {
+    height: 100vh;
+    width: 100vw;
+    overflow-y: scroll;
+    scroll-snap-type: y mandatory;
+  }
+
+  .verse-slide {
+    height: 100vh;
+    width: 100vw;
+    scroll-snap-align: start;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 40px;
+    position: relative;
+    color: #fff;
+    text-align: center;
+  }
+
+  .verse-ref {
+    font-size: 16px;
+    opacity: 0.7;
+    margin-bottom: 20px;
+    letter-spacing: 1px;
+  }
+
+  .verse-text {
+    font-size: 26px;
+    line-height: 1.6;
+    font-weight: 500;
+  }
+
+  .action-bar {
+    position: absolute;
+    bottom: 60px;
+    right: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    align-items: center;
+  }
+
+  .action-btn {
+    background: rgba(255,255,255,0.15);
+    border: none;
+    border-radius: 50%;
+    width: 50px;
+    height: 50px;
+    font-size: 22px;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .action-btn.liked {
+    background: #ff3b5c;
+  }
+
+  .toast {
+    position: fixed;
+    bottom: 40px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0,0,0,0.8);
+    color: #fff;
+    padding: 12px 20px;
+    border-radius: 20px;
+    font-size: 14px;
+    opacity: 0;
+    transition: opacity 0.3s;
+    pointer-events: none;
+    z-index: 999;
+  }
+
+  .toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<div id="feed"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+  // ===== 샘플 구절 데이터 (개역한글판) =====
+  const verses = [
+    {
+      ref: "창세기 1:1",
+      text: "태초에 하나님이 천지를 창조하시니라",
+      bg: "#1a1a2e"
+    },
+    {
+      ref: "시편 23:1",
+      text: "여호와는 나의 목자시니 내가 부족함이 없으리로다",
+      bg: "#16213e"
+    },
+    {
+      ref: "요한복음 3:16",
+      text: "하나님이 세상을 이처럼 사랑하사 독생자를 주셨으니 이는 저를 믿는 자마다 멸망치 않고 영생을 얻게 하려 하심이니라",
+      bg: "#0f3460"
+    },
+    {
+      ref: "잠언 3:5",
+      text: "너는 마음을 다하여 여호와를 신뢰하고 네 명철을 의지하지 말라",
+      bg: "#1a1a2e"
+    },
+    {
+      ref: "빌립보서 4:13",
+      text: "내게 능력 주시는 자 안에서 내가 모든 것을 할 수 있느니라",
+      bg: "#16213e"
+    },
+    {
+      ref: "이사야 41:10",
+      text: "두려워 말라 내가 너와 함께 함이니라 놀라지 말라 나는 네 하나님이 됨이니라",
+      bg: "#0f3460"
+    },
+    {
+      ref: "로마서 8:28",
+      text: "우리가 알거니와 하나님을 사랑하는 자 곧 그 뜻대로 부르심을 입은 자들에게는 모든 것이 합력하여 선을 이루느니라",
+      bg: "#1a1a2e"
+    },
+    {
+      ref: "마태복음 6:33",
+      text: "너희는 먼저 그의 나라와 그의 의를 구하라 그리하면 이 모든 것을 너희에게 더하시리라",
+      bg: "#16213e"
+    },
+    {
+      ref: "시편 46:1",
+      text: "하나님은 우리의 피난처시요 힘이시니 환난 중에 만날 큰 도움이시라",
+      bg: "#0f3460"
+    },
+    {
+      ref: "갈라디아서 5:22",
+      text: "오직 성령의 열매는 사랑과 희락과 화평과 오래 참음과 자비와 양선과 충성과",
+      bg: "#1a1a2e"
+    }
+  ];
+
+  const feed = document.getElementById('feed');
+  const toast = document.getElementById('toast');
+
+  // localStorage에서 저장된 구절 불러오기
+  function getLiked() {
+    return JSON.parse(localStorage.getItem('likedVerses') || '[]');
+  }
+
+  function toggleLike(ref, btn) {
+    let liked = getLiked();
+    if (liked.includes(ref)) {
+      liked = liked.filter(r => r !== ref);
+      btn.classList.remove('liked');
+      showToast('저장 취소됨');
+    } else {
+      liked.push(ref);
+      btn.classList.add('liked');
+      showToast('저장됨 ❤️');
+    }
+    localStorage.setItem('likedVerses', JSON.stringify(liked));
+  }
+
+  function showToast(msg) {
+    toast.textContent = msg;
+    toast.classList.add('show');
+    setTimeout(() => toast.classList.remove('show'), 1500);
+  }
+
+  function shareVerse(ref, text) {
+    const shareText = `"${text}" (${ref})`;
+    if (navigator.share) {
+      navigator.share({ text: shareText });
+    } else {
+      navigator.clipboard.writeText(shareText);
+      showToast('클립보드에 복사됨');
+    }
+  }
+
+  // 화면 렌더링
+  const likedList = getLiked();
+  verses.forEach(v => {
+    const slide = document.createElement('div');
+    slide.className = 'verse-slide';
+    slide.style.background = v.bg;
+
+    const isLiked = likedList.includes(v.ref) ? 'liked' : '';
+
+    slide.innerHTML = `
+      <div class="verse-ref">${v.ref}</div>
+      <div class="verse-text">${v.text}</div>
+      <div class="action-bar">
+        <button class="action-btn ${isLiked}" onclick="toggleLike('${v.ref}', this)">❤</button>
+        <button class="action-btn" onclick="shareVerse('${v.ref}', '${v.text.replace(/'/g, "\\'")}')">↗</button>
+      </div>
+    `;
+    feed.appendChild(slide);
+  });
+</script>
+
+</body>
+</html>
